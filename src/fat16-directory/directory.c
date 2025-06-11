@@ -59,7 +59,7 @@ void ls(char *args, void *shell) {
     memset(name, 0, 16);
 
     do {
-        for (uint32_t i = 0; i < 128; i++, rec++) { // 512 / 32 == 16
+        for (uint32_t i = 0; i < 128; i++, rec++) { // 4096 / 32 == 128
             if (!*((uint64_t *)(rec->name))) { // empty name means nofile or hidden file
                 continue;
             }
@@ -110,7 +110,7 @@ void ls(char *args, void *shell) {
     free(res);
 }
 
-void mkdir(char *args, void *shell) {
+void mkdir(char *args, void *shell_addr) {
     uint32_t nameLen, extLen = 0;
     char *name, *ext;
 
@@ -124,7 +124,8 @@ void mkdir(char *args, void *shell) {
     memcpy(nameBuf, name, nameLen);
     memcpy(extBuf, ext, extLen);
 
-    SysDirectory *dir = &(((Shell *)shell)->dir);
+    Shell *shell = (Shell *)shell_addr;
+    SysDirectory *dir = &(shell->dir);
     uint16_t *fat1 = dir->fat1,
              *fat2 = dir->fat2,
              clust = dir->clustNum,
@@ -154,7 +155,7 @@ void mkdir(char *args, void *shell) {
     } while (clust < 0xFFF8);
     
     rec = dir->content; clust = dir->clustNum;
-    uint32_t i, newClust = 0xFFFFFFFF, fatLen = dir->fatLen;
+    uint32_t i, newClust, fatLen = dir->fatLen;
     while (1) {
         for (i = 0; i < 128; i++, rec++) {
             if (!*((uint64_t *)(rec->name))
@@ -172,7 +173,7 @@ void mkdir(char *args, void *shell) {
                 break;
             }
         }
-        if (i < 16) {
+        if (i < 128) {
             break;
         }
 
@@ -187,6 +188,11 @@ void mkdir(char *args, void *shell) {
                     // try to add a clust
                     fat1[clust] = fat2[clust] = (uint16_t)i;
                     fat1[i] = fat2[i] = 0xFFFF;
+                    DirChainNode *shellBuf = shell->buf[shell->index].tail;
+                    if (shellBuf) {
+                        shellBuf->self->size += 4096;
+                    }
+                    break;
                 }
             }
             if (i == fatLen) {
@@ -198,10 +204,6 @@ void mkdir(char *args, void *shell) {
         clust = fat1[clust];
     }
     // add a directory
-    // if (newClust == 0xFFFFFFFF) {
-    //     printf("Mkdir failed, unknown error\n");
-    //     return;
-    // }
     strncpy(rec->name, name, nameLen);
     strncpy(rec->ext, ext, extLen);
     rec->type = 0x10; // dir
@@ -212,7 +214,7 @@ void mkdir(char *args, void *shell) {
     rec->size = 4096;
     fat1[newClust] = fat2[newClust] = 0xFFFF;
 
-    rec = (Record *)((char *)rec - i*32 + (newClust - clust)*4096);
+    rec = (Record *)(((char *)dir->content) + (newClust - dir->clustNum)*4096);
     memset(rec, 0, sizeof(Record));
     rec->name[0] = '.'; //.
     rec->type = 0x10; // dir
@@ -298,7 +300,7 @@ void cd(char *args, void *shell_addr) {
                         p->next = NULL;
                         shellBuf->tail = p;
                     }
-
+                    p->self = rec;
                     if (nameLen > 0 && extLen > 0) {
                         snprintf(p->name, 13, "%s.%s", nameBuf, extBuf);
                     }
@@ -325,4 +327,35 @@ void cd(char *args, void *shell_addr) {
 
     } while (clust < 0xFFF8);
     printf("No such directory: %s\n", args);
+}
+
+void delete_dir(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2) {
+    uint16_t clust = rec->clustNo, temp;
+    Record *p = (Record *)target;
+    do {
+        for (uint32_t i = 0; i < 128; i++, p++) {
+            if ((*((uint64_t *)p->name) != 0x2e && (*((uint32_t *)p->ext) & 0xffffff) != 0)
+                && (*((uint64_t *)p->name) != 0x2e2e && (*((uint32_t *)p->ext) & 0xffffff) != 0)
+                && (*((uint64_t *)p->name) != 0 && (*((uint32_t *)p->ext) & 0xffffff) != 0)) {
+                printf("Directory not empty\n");
+                return;
+            }
+        }
+        p = (Record *)((char *)p + (fat1[clust] - clust - 1)*4096);
+        clust = fat1[clust];
+    } while (clust < 0xFFF8);
+
+    clust = rec->clustNo;
+    do {
+        if (clust == 0) {
+            FAT_corupt();
+            exit(-1);
+        }
+        memset(p, 0, 4096);
+        p = (Record *)((char *)p + (fat1[clust] - clust)*4096);
+        temp = clust;
+        clust = fat1[clust];
+        fat1[temp] = fat2[temp] = 0;
+    } while (clust < 0xFFF8);
+    memset(rec, 0, sizeof(Record));
 }

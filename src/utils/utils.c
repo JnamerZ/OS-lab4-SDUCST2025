@@ -15,7 +15,7 @@ void mmap_failed() {
 }
 
 void FAT_corupt() {
-    perror("FAT corupted");
+    printf("FAT corupted\n");
 }
 
 int str2name_ext(char *input, char **name, char **ext, uint32_t *nameLen, uint32_t *extLen) {

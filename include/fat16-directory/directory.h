@@ -13,12 +13,13 @@ typedef struct {
 
 typedef struct {
     uint16_t clustNum;
+    uint32_t fatLen;
     uint16_t *fat1, *fat2;
-    uint16_t fatLen;
     Record *content;
 } SysDirectory;
 
 void ls(char *args, void *shell);
 void mkdir(char *args, void *shell);
 void cd(char *args, void *shell);
+void delete_dir(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2);
 #endif

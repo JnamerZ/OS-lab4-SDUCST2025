@@ -7,4 +7,5 @@
 typedef struct {
 } SysFile;
 
+void delete_file(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2);
 #endif

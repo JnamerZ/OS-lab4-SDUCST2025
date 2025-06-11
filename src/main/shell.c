@@ -1,6 +1,7 @@
 #include "main/shell.h"
 
 #include "utils/utils.h"
+#include "fat16-partition/partition.h"
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -21,7 +22,7 @@ struct Command {
 } commands[COMMAND_CNT] = {
     {"mkdir",   0,5,1,(void (* )(char *, void *))&mkdir},
     {"ls",      0,2,0,(void (* )(char *, void *))&ls},
-    {"delete",  1,6,1,NULL},
+    {"delete",  1,6,1,(void (* )(char *, void *))&delete},
     {"open",    0,5,1,NULL},
     {"read",    1,5,1,NULL},
     {"write",   1,5,1,NULL},
@@ -95,7 +96,6 @@ void startup(Shell *shell, Disk *disk) {
         print_prompt(shell);
         cmd = read_command();
         process_command(cmd, (void *)shell);
-
         free(cmd);
     }
 }

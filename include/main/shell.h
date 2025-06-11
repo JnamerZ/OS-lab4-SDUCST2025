@@ -9,7 +9,7 @@
 
 typedef struct DIR_BUF_CHAIN {
     struct DIR_BUF_CHAIN *prev, *next;
-    char name[13];
+    char name[13]; Record *self;
 } DirChainNode;
 
 typedef struct {

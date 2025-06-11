@@ -13,4 +13,6 @@ typedef struct {
     SysDirectory root;
 } SysPartition;
 
+void delete(char *args, void *shell);
+
 #endif
