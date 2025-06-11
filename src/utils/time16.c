@@ -1,4 +1,4 @@
-#include "fat16-partition/time16.h"
+#include "utils/time16.h"
 #include <time.h>
 
 void get_fat16_time_date(uint16_t *res_time, uint16_t *date) {

@@ -31,6 +31,8 @@ void load_mbr(MBR *mbr, SysMBR *sysmbr) {
         }
         p->root.content = (Record *)((char *)(p->fat2) + (dbr->secPerFAT << 9));
         p->root.clustNum = 0;
-        p->root.fat = p->fat1;
+        p->root.fat1 = p->fat1;
+        p->root.fat2 = p->fat2;
+        p->root.fatLen = dbr->secPerFAT;
     }
 }

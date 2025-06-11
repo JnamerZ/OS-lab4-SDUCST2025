@@ -17,7 +17,7 @@ struct Command {
     uint32_t argLen;
     void (* func)(char *, void *);
 } commands[8] = {
-    {"mkdir",   0,5,1,NULL},
+    {"mkdir",   0,5,1,(void (* )(char *, void *))&mkdir},
     {"ls",      0,2,0,(void (* )(char *, void *))&ls},
     {"delete",  1,6,1,NULL},
     {"open",    0,5,1,NULL},

@@ -1,7 +1,7 @@
 #include "fat16-partition/format.h"
 
 #include <string.h>
-#include "fat16-partition/time16.h"
+#include "utils/time16.h"
 
 #include <stdio.h>
 

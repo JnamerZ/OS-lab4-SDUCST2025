@@ -13,7 +13,8 @@ typedef struct {
 
 typedef struct {
     uint16_t clustNum;
-    uint16_t *fat;
+    uint16_t *fat1, *fat2;
+    uint16_t fatLen;
     Record *content;
 } SysDirectory;
 
