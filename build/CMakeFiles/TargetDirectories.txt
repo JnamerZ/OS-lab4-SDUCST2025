@@ -1,0 +1,3 @@
+/home/jnamerz/Documents/作业/OS/OS_lab4/code/build/CMakeFiles/main.dir
+/home/jnamerz/Documents/作业/OS/OS_lab4/code/build/CMakeFiles/edit_cache.dir
+/home/jnamerz/Documents/作业/OS/OS_lab4/code/build/CMakeFiles/rebuild_cache.dir
