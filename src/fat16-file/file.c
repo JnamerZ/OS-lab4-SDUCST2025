@@ -9,7 +9,7 @@ void delete_file(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2) {
     do {
         if (clust == 0) {
             FAT_corupt();
-            exit(-1);
+            return;
         }
         memset(target, 0, 4096);
         temp = clust;

@@ -349,7 +349,7 @@ void delete_dir(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2) {
     do {
         if (clust == 0) {
             FAT_corupt();
-            exit(-1);
+            return;
         }
         memset(p, 0, 4096);
         p = (Record *)((char *)p + (fat1[clust] - clust)*4096);

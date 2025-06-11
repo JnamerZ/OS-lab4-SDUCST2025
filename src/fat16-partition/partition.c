@@ -5,6 +5,7 @@
 #include "fat16-directory/directory.h"
 #include "fat16-file/file.h"
 #include <string.h>
+#include <stdio.h>
 
 void delete(char *args, void *shell_addr) {
     uint32_t nameLen, extLen = 0;
@@ -20,6 +21,12 @@ void delete(char *args, void *shell_addr) {
     strncpy(nameBuf, name, nameLen);
     strncpy(extBuf, ext, extLen);
 
+    if ((*((uint64_t *)nameBuf) == 0x2e && (*((uint32_t *)extBuf) & 0xffffff) == 0)
+        || (*((uint64_t *)nameBuf) == 0x2e2e && (*((uint32_t *)extBuf) & 0xffffff) == 0)) {
+        printf("Invalid file name or directory name: %s\n", args);
+        return;
+    }
+
     Shell *shell = (Shell *)shell_addr;
     SysDirectory *dir = &shell->dir;
     uint16_t *fat1 = dir->fat1,
@@ -28,7 +35,7 @@ void delete(char *args, void *shell_addr) {
     Record *rec = dir->content;
     do {
         rec += 2;
-        for (uint32_t i = 0; i < 126; i++, rec++) {
+        for (uint32_t i = 0; i < 128; i++, rec++) {
             if ((*((uint64_t *)(rec->name)) == 0)
                 && (*((uint32_t *)(rec->ext)) == 0)) {
                 continue;
@@ -54,4 +61,5 @@ void delete(char *args, void *shell_addr) {
         clust = fat1[clust];
 
     } while (clust < 0xFFF8);
+    printf("No such file or directory: %s\n", args);
 }
