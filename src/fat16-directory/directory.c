@@ -73,7 +73,7 @@ void ls(char *args, void *shell) {
                 strncat(name, rec->ext, extLen);
             }
 
-            snprintf(temp, 48, "%s %d %04d-%02d-%02d %02d:%02d:%2d %s\n", 
+            snprintf(temp, 48, "%s %4d %04d-%02d-%02d %02d:%02d:%2d %s\n", 
                 get_type_string(rec->type),
                 rec->size,
                 ((rec->date >> 9) + 80) + 1900,
@@ -98,7 +98,7 @@ void ls(char *args, void *shell) {
         }
 
         if (fat1[clust] == 0) {
-            FAT_corupt();
+            FAT_corrupt();
             return;
         }
         rec = (Record *)((char *)rec + (fat1[clust] - clust - 1) * 4096);
@@ -140,13 +140,13 @@ void mkdir(char *args, void *shell_addr) {
             }
             
             if (!strncmp(nameBuf, rec->name, 8) && !strncmp(extBuf, rec->ext, 3)) {
-                printf("Directory already exists.\n");
+                printf("File or directory already exists\n");
                 return;
             }
         }
 
         if (fat1[clust] == 0) {
-            FAT_corupt();
+            FAT_corrupt();
             return;
         }
         rec = (Record *)((char *)rec + (fat1[clust] - clust - 1) * 4096);
@@ -178,7 +178,7 @@ void mkdir(char *args, void *shell_addr) {
         }
 
         if (fat1[clust] == 0) {
-            FAT_corupt();
+            FAT_corrupt();
             return;
         }
 
@@ -319,7 +319,7 @@ void cd(char *args, void *shell_addr) {
         }
 
         if (fat1[clust] == 0) {
-            FAT_corupt();
+            FAT_corrupt();
             return;
         }
         rec = (Record *)((char *)rec + (fat1[clust] - clust - 1) * 4096);
@@ -348,7 +348,7 @@ void delete_dir(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2) {
     clust = rec->clustNo;
     do {
         if (clust == 0) {
-            FAT_corupt();
+            FAT_corrupt();
             return;
         }
         memset(p, 0, 4096);

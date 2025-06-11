@@ -14,8 +14,8 @@ void mmap_failed() {
     perror("Memory map failed");
 }
 
-void FAT_corupt() {
-    printf("FAT corupted\n");
+void FAT_corrupt() {
+    printf("FAT corrupted\n");
 }
 
 int str2name_ext(char *input, char **name, char **ext, uint32_t *nameLen, uint32_t *extLen) {

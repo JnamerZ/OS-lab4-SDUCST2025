@@ -15,27 +15,32 @@ void shell_exit() {
 #define COMMAND_CNT 9
 
 struct Command {
-    char op[7], mode;
+    char op[8];
     uint32_t length;
     uint32_t argLen;
     void (* func)(char *, void *);
 } commands[COMMAND_CNT] = {
-    {"mkdir",   0,5,1,(void (* )(char *, void *))&mkdir},
-    {"ls",      0,2,0,(void (* )(char *, void *))&ls},
-    {"delete",  1,6,1,(void (* )(char *, void *))&delete},
-    {"open",    0,5,1,NULL},
-    {"read",    1,5,1,NULL},
-    {"write",   1,5,1,NULL},
-    {"close",   1,5,1,NULL},
-    {"exit",    2,4,0,(void (* )(char *, void *))&shell_exit},
-    {"cd",      0,2,1,(void (* )(char *, void *))&cd}
+    {"mkdir",   5,1,(void (* )(char *, void *))&mkdir},
+    {"ls",      2,0,(void (* )(char *, void *))&ls},
+    {"delete",  6,1,(void (* )(char *, void *))&delete},
+    {"open",    5,1,(void (* )(char *, void *))&open},
+    {"read",    5,1,NULL},
+    {"write",   5,1,NULL},
+    {"close",   5,0,(void (* )(char *, void *))&close},
+    {"exit",    4,0,(void (* )(char *, void *))&shell_exit},
+    {"cd",      2,1,(void (* )(char *, void *))&cd}
 };
 
 void print_prompt(Shell *shell) {
     printf("/");
     DirChainNode *p = shell->buf[shell->index].head;
     while (p) {
-        printf("%s/", p->name);
+        if (p->self->type == 0x10) { 
+            printf("%s/", p->name);
+        }
+        else {
+            printf("%s", p->name);
+        }
         p = p->next;
     }
     printf(" $ ");

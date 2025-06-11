@@ -47,14 +47,19 @@ void delete(char *args, void *shell_addr) {
                     delete_dir(rec, target, fat1, fat2);
                 }
                 else {
-                    delete_file(rec, target, fat1, fat2);
+                    if (shell->mode == 0) {
+                        delete_file(rec, target, fat1, fat2);
+                    }
+                    else {
+                        printf("Opening a file, please close it first\n");
+                    }
                 }
                 return;
             }
         }
 
         if (fat1[clust] == 0) {
-            FAT_corupt();
+            FAT_corrupt();
             return;
         }
         rec = (Record *)((char *)rec + (fat1[clust] - clust - 1) * 4096);

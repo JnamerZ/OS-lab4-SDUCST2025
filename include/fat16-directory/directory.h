@@ -4,6 +4,8 @@
 #include <stdint.h>
 
 // all bytes are null means empty string
+// type: 0 - rw_file; 16 - directory
+// empty name means hidden file
 typedef struct {
     char name[8], ext[3],
             type, reserved[10];

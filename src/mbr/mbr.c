@@ -25,7 +25,7 @@ void load_mbr(MBR *mbr, SysMBR *sysmbr) {
         p->fatLen = dbr->secPerFAT << 8; // 256 items per sec
         for (uint32_t j = 0; j < p->fatLen; j++) {
             if (p->fat1[j] != p->fat2[j]) {
-                FAT_corupt();
+                FAT_corrupt();
                 exit(-1);
             }
         }
