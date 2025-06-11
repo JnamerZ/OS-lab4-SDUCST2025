@@ -2,6 +2,7 @@
 
 #include "utils/utils.h"
 #include "utils/time16.h"
+#include "main/shell.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -32,7 +33,7 @@ char *get_type_string(char type){
 
 // result: *** size date time filename
 // length: 3+1 + 4+1 + 10+1 + 8+1 + 12 + 1 = 42
-void ls(char *args, SysDirectory * dir) {
+void ls(char *args, void *shell) {
     if (args && strlen(args)) {
         printf("Too many arguments\n");
         return;
@@ -41,7 +42,8 @@ void ls(char *args, SysDirectory * dir) {
     char temp[48],
          *res,
          name[16];
-
+    
+    SysDirectory *dir = &(((Shell *)shell)->dir);
     uint16_t *fat1 = dir->fat1,
              clust = dir->clustNum;
     Record *rec = dir->content;
@@ -57,7 +59,7 @@ void ls(char *args, SysDirectory * dir) {
     memset(name, 0, 16);
 
     do {
-        for (uint32_t i = 0; i < 16; i++, rec++) { // 512 / 32 == 16
+        for (uint32_t i = 0; i < 128; i++, rec++) { // 512 / 32 == 16
             if (!*((uint64_t *)(rec->name))) { // empty name means nofile or hidden file
                 continue;
             }
@@ -78,8 +80,8 @@ void ls(char *args, SysDirectory * dir) {
                 (((rec->date >> 5) & 0xf)),
                 (rec->date & 0x1f),
                 (rec->time >> 11),
-                (((rec->date >> 5) & 0xf)),
-                (rec->date & 0x1f) << 1,
+                (((rec->time >> 5) & 0x3f)),
+                (rec->time & 0x1f) << 1,
                 name
             );
             bufferFree -= (int64_t)strlen(temp);
@@ -108,47 +110,53 @@ void ls(char *args, SysDirectory * dir) {
     free(res);
 }
 
-void mkdir(char *args, SysDirectory *dir) {
+void mkdir(char *args, void *shell) {
     uint32_t nameLen, extLen = 0;
-    if (!args || !(nameLen = (uint32_t)strlen(args))) {
-        printf("Missing directory name\n");
+    char *name, *ext;
+
+    if (str2name_ext(args, &name, &ext, &nameLen, &extLen)) {
         return;
     }
-    
-    char *split;
-    for (split = args + nameLen - 1; *split != '.' && split >= args; split--) ;
 
-    if (split < args) {
-        if (nameLen > 8) {
-            printf("Too long directory name\n");
-            return;
-        }
-        split = args + nameLen;
-    }
-    else {
-        extLen = (uint32_t)(nameLen - (split - args) - 1);
-        if (extLen > 3) {
-            printf("Too long extention name\n");
-            return;
-        }
-        nameLen = (uint32_t)(split - args);
-        if (nameLen > 8) {
-            printf("Too long directory name\n");
-            return;
-        }
-        split++;
-    }
+    char nameBuf[9], extBuf[4];
+    memset(nameBuf, 0, sizeof(nameBuf));
+    memset(extBuf, 0, sizeof(extBuf));
+    memcpy(nameBuf, name, nameLen);
+    memcpy(extBuf, ext, extLen);
 
-    // now split == extName, args == dirName
+    SysDirectory *dir = &(((Shell *)shell)->dir);
     uint16_t *fat1 = dir->fat1,
              *fat2 = dir->fat2,
              clust = dir->clustNum,
              now_time, now_date;
     Record *rec = dir->content;
+
+    do {
+        for (uint32_t i = 0; i < 128; i++, rec++) {
+            if ((*((uint64_t *)(rec->name)) == 0)
+                && (*((uint32_t *)(rec->ext)) == 0)) {
+                continue;
+            }
+            
+            if (!strncmp(nameBuf, rec->name, 8) && !strncmp(extBuf, rec->ext, 3)) {
+                printf("Directory already exists.\n");
+                return;
+            }
+        }
+
+        if (fat1[clust] == 0) {
+            FAT_corupt();
+            return;
+        }
+        rec = (Record *)((char *)rec + (fat1[clust] - clust - 1) * 4096);
+        clust = fat1[clust];
+
+    } while (clust < 0xFFF8);
     
+    rec = dir->content; clust = dir->clustNum;
     uint32_t i, newClust = 0xFFFFFFFF, fatLen = dir->fatLen;
     while (1) {
-        for (i = 0; i < 16; i++, rec++) {
+        for (i = 0; i < 128; i++, rec++) {
             if (!*((uint64_t *)(rec->name))
                 && !*((uint32_t *)(rec->ext))) {
                 // try add a directory
@@ -179,41 +187,23 @@ void mkdir(char *args, SysDirectory *dir) {
                     // try to add a clust
                     fat1[clust] = fat2[clust] = (uint16_t)i;
                     fat1[i] = fat2[i] = 0xFFFF;
-                    rec = (Record *)((char *)rec + (i - clust - 1) * 4096);
-
-                    // try to find a new clust for new directory
-                    for (newClust = 0; newClust < fatLen; newClust++) {
-                        if (fat1[newClust] == 0) {
-                            break;
-                        }
-                    }
-                    if (newClust == fatLen) {
-                        fat1[clust] = fat2[clust] = 0xFFFF;
-                        fat1[i] = fat2[i] = 0;
-                        printf("Partition full\n");
-                        return;
-                    }
-                    break;
                 }
             }
             if (i == fatLen) {
                 printf("Partition full\n");
                 return;
             }
-            else {
-                break;
-            }
         }
         rec = (Record *)((char *)rec + (fat1[clust] - clust - 1) * 4096);
         clust = fat1[clust];
     }
     // add a directory
-    if (newClust == 0xFFFFFFFF) {
-        printf("Mkdir failed, unknown error\n");
-        return;
-    }
-    strncpy(rec->name, args, nameLen);
-    strncpy(rec->ext, split, extLen);
+    // if (newClust == 0xFFFFFFFF) {
+    //     printf("Mkdir failed, unknown error\n");
+    //     return;
+    // }
+    strncpy(rec->name, name, nameLen);
+    strncpy(rec->ext, ext, extLen);
     rec->type = 0x10; // dir
     get_fat16_time_date(&now_time, &now_date);
     rec->time = now_time;
@@ -223,6 +213,7 @@ void mkdir(char *args, SysDirectory *dir) {
     fat1[newClust] = fat2[newClust] = 0xFFFF;
 
     rec = (Record *)((char *)rec - i*32 + (newClust - clust)*4096);
+    memset(rec, 0, sizeof(Record));
     rec->name[0] = '.'; //.
     rec->type = 0x10; // dir
     rec->time = now_time;
@@ -230,6 +221,7 @@ void mkdir(char *args, SysDirectory *dir) {
     rec->clustNo = (uint16_t)newClust;
     rec->size = 4096;
     rec += 1;
+    memset(rec, 0, sizeof(Record));
     rec->name[0] = '.';
     rec->name[1] = '.'; //..
     rec->type = 0x10; // dir
@@ -237,4 +229,100 @@ void mkdir(char *args, SysDirectory *dir) {
     rec->date = now_date;
     rec->clustNo = dir->clustNum;
     rec->size = 4096;
+}
+
+void cd(char *args, void *shell_addr) {
+    uint32_t nameLen, extLen = 0;
+    char *name, *ext;
+
+    if (str2name_ext(args, &name, &ext, &nameLen, &extLen)) {
+        return;
+    }
+
+    char nameBuf[9], extBuf[4];
+    memset(nameBuf, 0, 9);
+    memset(extBuf, 0, 4);
+    strncpy(nameBuf, name, nameLen);
+    strncpy(extBuf, ext, extLen);
+
+    Shell *shell = (Shell *)shell_addr;
+    SysDirectory *dir = &shell->dir;
+    uint16_t *fat1 = dir->fat1,
+             clust = dir->clustNum;
+    Record *rec = dir->content;
+    DirectoryBuffer *shellBuf = &(shell->buf[shell->index]);
+    DirChainNode *p;
+    do {
+        for (uint32_t i = 0; i < 128; i++, rec++) {
+            if (!(*((uint64_t *)(rec->name)))
+                && !(*((uint32_t *)(rec->ext)))) {
+                continue;
+            }
+            if (!strncmp(rec->name, nameBuf, 8)
+                && !strncmp(rec->ext, extBuf, 3)) {    
+                if (!strncmp(nameBuf, ".", 2)) {
+                    return;
+                }
+                else if (!strncmp(nameBuf, "..", 3)) {
+                    if ((p = shellBuf->tail)) {
+                        if (p->prev) {
+                            p = p->prev;
+                            free(p->next);
+                            p->next = NULL;
+                            shellBuf->tail = p;
+                        }
+                        else {
+                            free(shellBuf->tail);
+                            shellBuf->head = shellBuf->tail = NULL;
+                        }
+                    }
+                }
+                else {
+                    if (!shellBuf->tail) {
+                        p = shellBuf->head = shellBuf->tail = calloc(1, sizeof(DirChainNode));
+                        if (!p) {
+                            calloc_failed();
+                            exit(-1);
+                        }
+                        p->prev = p->next = NULL;
+                    }
+                    else {
+                        p = shellBuf->tail;
+                        p->next = calloc(1, sizeof(DirChainNode));
+                        if (!p->next) {
+                            calloc_failed();
+                            exit(-1);
+                        }
+                        p->next->prev = p;
+                        p = p->next;
+                        p->next = NULL;
+                        shellBuf->tail = p;
+                    }
+
+                    if (nameLen > 0 && extLen > 0) {
+                        snprintf(p->name, 13, "%s.%s", nameBuf, extBuf);
+                    }
+                    else if (nameLen > 0) {
+                        snprintf(p->name, 13, "%s", nameBuf);
+                    }
+                    else { //if (extLen > 0)
+                        snprintf(p->name, 13, ".%s", extBuf);
+                    }
+                }
+                dir->content = (Record *)((char *)dir->content + (rec->clustNo - dir->clustNum) * 4096);
+                dir->clustNum = rec->clustNo;
+                return;
+            }
+            
+        }
+
+        if (fat1[clust] == 0) {
+            FAT_corupt();
+            return;
+        }
+        rec = (Record *)((char *)rec + (fat1[clust] - clust - 1) * 4096);
+        clust = fat1[clust];
+
+    } while (clust < 0xFFF8);
+    printf("No such directory: %s\n", args);
 }

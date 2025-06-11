@@ -18,7 +18,7 @@ typedef struct {
     Record *content;
 } SysDirectory;
 
-void ls(char *args, SysDirectory *rec);
-void mkdir(char *args, SysDirectory *rec);
-
+void ls(char *args, void *shell);
+void mkdir(char *args, void *shell);
+void cd(char *args, void *shell);
 #endif

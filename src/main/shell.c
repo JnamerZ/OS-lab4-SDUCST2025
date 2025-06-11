@@ -11,12 +11,14 @@ void shell_exit() {
     exit(0);
 }
 
+#define COMMAND_CNT 9
+
 struct Command {
     char op[7], mode;
     uint32_t length;
     uint32_t argLen;
     void (* func)(char *, void *);
-} commands[8] = {
+} commands[COMMAND_CNT] = {
     {"mkdir",   0,5,1,(void (* )(char *, void *))&mkdir},
     {"ls",      0,2,0,(void (* )(char *, void *))&ls},
     {"delete",  1,6,1,NULL},
@@ -24,15 +26,16 @@ struct Command {
     {"read",    1,5,1,NULL},
     {"write",   1,5,1,NULL},
     {"close",   1,5,1,NULL},
-    {"exit",    2,4,0,(void (* )(char *, void *))&shell_exit}
+    {"exit",    2,4,0,(void (* )(char *, void *))&shell_exit},
+    {"cd",      0,2,1,(void (* )(char *, void *))&cd}
 };
 
 void print_prompt(Shell *shell) {
     printf("/");
-    DirectoryBuffer *p = shell->buf[shell->index];
+    DirChainNode *p = shell->buf[shell->index].head;
     while (p) {
-        printf("%s/", p->dirname);
-        p = p->child;
+        printf("%s/", p->name);
+        p = p->next;
     }
     printf(" $ ");
 }
@@ -59,19 +62,19 @@ char* read_command() {
     return buf;
 }
 
-void process_command(char *buf, SysDirectory *dir) {
+void process_command(char *buf, void *shell) {
     char *arg = strstr(buf, " ");
     if (arg) {
         *arg = 0; arg++;
     }
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < COMMAND_CNT; i++) {
         if (!strncmp(commands[i].op, buf, commands[i].length)) {
             if ((!arg) && (commands[i].argLen > 0)) {
                 printf("Missing arguments\n");
                 return;
             }
-            commands[i].func(arg, (void *)dir);
+            commands[i].func(arg, shell);
             return;
         }
     }
@@ -80,23 +83,18 @@ void process_command(char *buf, SysDirectory *dir) {
 
 void startup(Shell *shell, Disk *disk) {
     shell->partition = &(disk->sysmbr.partitions[0]);
-    shell->dir = &(disk->sysmbr.partitions[0].root);
-    shell->file = NULL;
-    shell->buf[0] = NULL;
-    shell->buf[1] = NULL;
-    shell->buf[2] = NULL;
-    shell->buf[3] = NULL;
+    memcpy(&(shell->dir), &(disk->sysmbr.partitions[0].root), sizeof(SysDirectory));
+    memset(&(shell->file), 0, sizeof(SysFile));
+    for (int i = 0; i < 4; i++) {
+        shell->buf[i].head = shell->buf[i].tail = NULL;
+    }
     shell->index = shell->mode = 0;
 
     char *cmd;
-
     while (1) {
         print_prompt(shell);
         cmd = read_command();
-        if (shell->mode) {}
-        else {
-            process_command(cmd, shell->dir);
-        }
+        process_command(cmd, (void *)shell);
 
         free(cmd);
     }
