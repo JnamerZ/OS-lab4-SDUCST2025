@@ -383,5 +383,6 @@ void delete_dir(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2) {
         clust = fat1[clust];
         fat1[temp] = fat2[temp] = 0;
     } while (clust < 0xFFF8);
+    free(rec->mutex);
     memset(rec, 0, sizeof(Record));
 }

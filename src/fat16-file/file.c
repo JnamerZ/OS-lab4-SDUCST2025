@@ -25,6 +25,7 @@ void delete_file(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2) {
         fat1[temp] = fat2[temp] = 0;
         target = (target + (clust - temp)*4096);
     } while (clust < 0xFFF8);
+    free(rec->mutex);
     memset(rec, 0, sizeof(Record));
 }
 
