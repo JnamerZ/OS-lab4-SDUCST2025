@@ -14,5 +14,5 @@ typedef struct {
 } SysPartition;
 
 void delete(char *args, void *shell);
-
+void part(char *args, void *shell);
 #endif

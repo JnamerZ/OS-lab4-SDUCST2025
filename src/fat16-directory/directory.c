@@ -43,7 +43,7 @@ void ls(char *args, void *shell) {
          *res,
          name[16];
     
-    SysDirectory *dir = &(((Shell *)shell)->dir);
+    SysDirectory *dir = &(((Shell *)shell)->dir[((Shell *)shell)->index]);
     uint16_t *fat1 = dir->fat1,
              clust = dir->clustNum;
     Record *rec = dir->content;
@@ -112,7 +112,7 @@ void ls(char *args, void *shell) {
 
 void mkdir(char *args, void *shell_addr) {
     Shell *shell = (Shell *)shell_addr;
-    if (shell->mode) { 
+    if (shell->mode[shell->index]) { 
         printf("Opening a file, please close it first\n");
         return;
     }
@@ -130,7 +130,7 @@ void mkdir(char *args, void *shell_addr) {
     memcpy(nameBuf, name, nameLen);
     memcpy(extBuf, ext, extLen);
 
-    SysDirectory *dir = &(shell->dir);
+    SysDirectory *dir = &(shell->dir[shell->index]);
     uint16_t *fat1 = dir->fat1,
              *fat2 = dir->fat2,
              clust = dir->clustNum,
@@ -240,7 +240,7 @@ void mkdir(char *args, void *shell_addr) {
 
 void cd(char *args, void *shell_addr) {
     Shell *shell = (Shell *)shell_addr;
-    if (shell->mode) { 
+    if (shell->mode[shell->index]) { 
         printf("Opening a file, please close it first\n");
         return;
     }
@@ -258,7 +258,7 @@ void cd(char *args, void *shell_addr) {
     strncpy(nameBuf, name, nameLen);
     strncpy(extBuf, ext, extLen);
 
-    SysDirectory *dir = &shell->dir;
+    SysDirectory *dir = &shell->dir[shell->index];
     uint16_t *fat1 = dir->fat1,
              clust = dir->clustNum;
     Record *rec = dir->content;

@@ -6,6 +6,7 @@
 #include "fat16-file/file.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void delete(char *args, void *shell_addr) {
     uint32_t nameLen, extLen = 0;
@@ -28,7 +29,7 @@ void delete(char *args, void *shell_addr) {
     }
 
     Shell *shell = (Shell *)shell_addr;
-    SysDirectory *dir = &shell->dir;
+    SysDirectory *dir = &shell->dir[shell->index];
     uint16_t *fat1 = dir->fat1,
              *fat2 = dir->fat2,
              clust = dir->clustNum;
@@ -47,7 +48,7 @@ void delete(char *args, void *shell_addr) {
                     delete_dir(rec, target, fat1, fat2);
                 }
                 else {
-                    if (shell->mode == 0) {
+                    if (shell->mode[shell->index] == 0) {
                         delete_file(rec, target, fat1, fat2);
                     }
                     else {
@@ -67,4 +68,20 @@ void delete(char *args, void *shell_addr) {
 
     } while (clust < 0xFFF8);
     printf("No such file or directory: %s\n", args);
+}
+
+void part(char *args, void *shell) {
+    if (!args || !strlen(args)) {
+        printf("Missing arguments\n");
+        return;
+    }
+
+    uint8_t target = (uint8_t)atoi(args);
+    if (target > 3) {
+        printf("Invalid partition index\n");
+        return;
+    }
+
+    ((Shell *)shell)->index = target;
+    printf("Change partition to %u\n", target);
 }

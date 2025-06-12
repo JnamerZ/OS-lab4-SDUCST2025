@@ -12,7 +12,7 @@ void shell_exit() {
     exit(0);
 }
 
-#define COMMAND_CNT 9
+#define COMMAND_CNT 10
 
 struct Command {
     char op[8];
@@ -28,7 +28,8 @@ struct Command {
     {"write",   5,1,(void (* )(char *, void *))&write},
     {"close",   5,0,(void (* )(char *, void *))&close},
     {"exit",    4,0,(void (* )(char *, void *))&shell_exit},
-    {"cd",      2,1,(void (* )(char *, void *))&cd}
+    {"cd",      2,1,(void (* )(char *, void *))&cd},
+    {"part",    4,1,(void (* )(char *, void *))&part}
 };
 
 void print_prompt(Shell *shell) {
@@ -88,13 +89,14 @@ void process_command(char *buf, void *shell) {
 }
 
 void startup(Shell *shell, Disk *disk) {
-    shell->partition = &(disk->sysmbr.partitions[0]);
-    memcpy(&(shell->dir), &(disk->sysmbr.partitions[0].root), sizeof(SysDirectory));
+    memcpy(shell->partitions, &(disk->sysmbr.partitions), 4*sizeof(SysPartition));
     memset(&(shell->file), 0, sizeof(SysFile));
     for (int i = 0; i < 4; i++) {
+        memcpy(&(shell->dir[i]), &(disk->sysmbr.partitions[i].root), sizeof(SysDirectory));
         shell->buf[i].head = shell->buf[i].tail = NULL;
+        shell->mode[i] = 0;
     }
-    shell->index = shell->mode = 0;
+    shell->index = 0;
 
     char *cmd;
     while (1) {

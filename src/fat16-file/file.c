@@ -121,7 +121,7 @@ CREATE_FILE_FAIL:
 
 void open(char *args, void *shell_addr) {
     Shell *shell = (Shell *)shell_addr;
-    if (shell->mode) {
+    if (shell->mode[shell->index]) {
         printf("Already opening a file\n");
         return;
     }
@@ -148,7 +148,7 @@ void open(char *args, void *shell_addr) {
     uint32_t mode;
     mode = (uint32_t)atoi(nextArg);
 
-    SysDirectory *dir = &(shell->dir);
+    SysDirectory *dir = &(shell->dir[shell->index]);
     Record *rec = NULL;
     int result = find_file(dir, nameBuf, extBuf, &rec);
     if (result == 1 && mode == 0) {
@@ -160,11 +160,11 @@ void open(char *args, void *shell_addr) {
         return;
     }
     DirectoryBuffer *shellBuf = &(shell->buf[shell->index]);
-    DirChainNode *p; SysFile *file = &shell->file;
-    uint16_t *fat1 = shell->partition->fat1;
+    DirChainNode *p; SysFile *file = &shell->file[shell->index];
+    uint16_t *fat1 = shell->partitions[shell->index].fat1;
     switch (mode) {
         case 0:
-            shell->mode = 1;
+            shell->mode[shell->index] = 1;
             if (shellBuf->tail) {
                 p = shellBuf->tail;
                 p->next = calloc(1, sizeof(DirChainNode));
@@ -215,7 +215,7 @@ void open(char *args, void *shell_addr) {
             memcpy(rec->ext, extBuf, 3);
             rec->type = 0;
 
-            shell->mode = 1;
+            shell->mode[shell->index] = 1;
             if (shellBuf->tail) {
                 p = shellBuf->tail;
                 p->next = calloc(1, sizeof(DirChainNode));
@@ -287,12 +287,12 @@ void close(char *args, void *shell_addr) {
     }
 
     Shell *shell = (Shell *)shell_addr;
-    if (!shell->mode) {
+    if (!shell->mode[shell->index]) {
         printf("Not opening a file\n");
         return;
     }
 
-    shell->mode = 0;
+    shell->mode[shell->index] = 0;
     DirectoryBuffer *shellBuf = &shell->buf[shell->index];
     DirChainNode *p = shellBuf->tail;
     if (!p) {
@@ -314,13 +314,13 @@ void close(char *args, void *shell_addr) {
 
 void read(char *args, void *shell_addr) {
     Shell *shell = (Shell *)shell_addr;
-    if (!shell->mode) {
+    if (!shell->mode[shell->index]) {
         printf("Open a file first\n");
         return;
     }
 
     uint32_t size = (uint32_t)atoi(args);
-    SysFile *file = &shell->file;
+    SysFile *file = &shell->file[shell->index];
 
     if (size == 0xFFFFFFFF) { // -1
         file->read = file->content;
@@ -341,7 +341,7 @@ void read(char *args, void *shell_addr) {
     
     uint16_t clust = file->clustNum,
              clust_offset = (uint16_t)(file->alreadyRead / 4096),
-             *fat1 = shell->partition->fat1;
+             *fat1 = shell->partitions[shell->index].fat1;
     for (uint16_t i = 0; i < clust_offset; i++) {
         clust = fat1[clust];
     }
@@ -401,11 +401,11 @@ void read(char *args, void *shell_addr) {
 
 void write(char *args, void *shell_addr) {
     Shell *shell = (Shell *)shell_addr;
-    if (!shell->mode) {
+    if (!shell->mode[shell->index]) {
         printf("Open a file first\n");
         return;
     }
-    SysFile *file = &shell->file;
+    SysFile *file = &shell->file[shell->index];
     if (file->mode == 0) {
         printf("Read only mode\n");
         return;
@@ -422,9 +422,9 @@ void write(char *args, void *shell_addr) {
 
     uint16_t clust = file->clustNum,
              clust_offset = (uint16_t)(file->alreadyWrite / 4096),
-             *fat1 = shell->partition->fat1,
-             *fat2 = shell->partition->fat2;
-    uint32_t fatLen = shell->partition->fatLen;
+             *fat1 = shell->partitions[shell->index].fat1,
+             *fat2 = shell->partitions[shell->index].fat2;
+    uint32_t fatLen = shell->partitions->fatLen;
 
     uint32_t newSize = file->alreadyWrite + size,
              newClustCnt = (newSize / 4096) - (file->size / 4096);

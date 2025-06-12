@@ -5,8 +5,7 @@
 #include "fat16-directory/directory.h"
 
 typedef struct {
-    uint16_t clustNum,
-             *fat1, *fat2;
+    uint16_t clustNum;
     uint32_t mode, size,
              alreadyRead, alreadyWrite,
              remainRead, remainWrite;

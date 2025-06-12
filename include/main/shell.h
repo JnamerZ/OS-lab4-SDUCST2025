@@ -18,10 +18,10 @@ typedef struct {
 } DirectoryBuffer;
 
 typedef struct {
-    SysPartition *partition;
-    uint8_t index, mode;
-    SysDirectory dir;
-    SysFile file;
+    uint8_t index, mode[4];
+    SysPartition partitions[4];
+    SysDirectory dir[4];
+    SysFile file[4];
     DirectoryBuffer buf[4];
 } Shell;
 
