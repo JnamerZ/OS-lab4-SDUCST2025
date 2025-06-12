@@ -221,6 +221,11 @@ void mkdir(char *args, void *shell_addr) {
     rec->date = now_date;
     rec->clustNo = (uint16_t)newClust;
     rec->size = 4096;
+    rec->mutex = malloc(sizeof(pthread_mutex_t));
+    if (pthread_mutex_init(rec->mutex, NULL)) {
+        printf("Init mutex error\n");
+        exit(-1);
+    }
     fat1[newClust] = fat2[newClust] = 0xFFFF;
 
     rec = (Record *)(((char *)dir->content) + (newClust - dir->clustNum)*4096);

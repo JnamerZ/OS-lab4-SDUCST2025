@@ -14,3 +14,5 @@ add_executable(main ${PROJECT_SOURCES} ${PROJECT_HEADERS})
 target_include_directories(main PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+target_link_libraries(main pthread)

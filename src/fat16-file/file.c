@@ -216,6 +216,11 @@ void open(char *args, void *shell_addr) {
             memcpy(rec->name, nameBuf, 8);
             memcpy(rec->ext, extBuf, 3);
             rec->type = 0;
+            rec->mutex = malloc(sizeof(pthread_mutex_t));
+            if (pthread_mutex_init(rec->mutex, NULL)) {
+                printf("Init mutex error\n");
+                exit(-1);
+            }
 
             shell->mode[shell->index] = 1;
             if (shellBuf->tail) {

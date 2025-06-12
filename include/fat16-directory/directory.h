@@ -2,13 +2,16 @@
 #define DIRECTORY_H
 
 #include <stdint.h>
+#include <pthread.h>
 
 // all bytes are null means empty string
 // type: 0 - rw_file; 16 - directory
 // empty name means hidden file
 typedef struct {
     char name[8], ext[3],
-            type, reserved[10];
+            type;
+    pthread_mutex_t * mutex;
+    char reserved[2]; // use reserved store mutex_ptr
     uint16_t time, date, clustNo;
     uint32_t size;
 }  __attribute__((packed)) Record;
