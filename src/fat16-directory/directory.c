@@ -32,7 +32,7 @@ char *get_type_string(char type){
 }
 
 // result: *** size date time filename
-// length: 3+1 + 4+1 + 10+1 + 8+1 + 12 + 1 = 42
+// length: 3+1 + 4+1 + 10+1 + 8+1 + 12+2 + 1 = 44
 void ls(char *args, void *shell) {
     if (args && strlen(args)) {
         printf("Too many arguments\n");
@@ -73,7 +73,7 @@ void ls(char *args, void *shell) {
                 strncat(name, rec->ext, extLen);
             }
 
-            snprintf(temp, 48, "%s %4d %04d-%02d-%02d %02d:%02d:%2d %s\n", 
+            snprintf(temp, 48, "%s %4d %04d-%02d-%02d %02d:%02d:%02d |%s|\n", 
                 get_type_string(rec->type),
                 rec->size,
                 ((rec->date >> 9) + 80) + 1900,
@@ -111,6 +111,12 @@ void ls(char *args, void *shell) {
 }
 
 void mkdir(char *args, void *shell_addr) {
+    Shell *shell = (Shell *)shell_addr;
+    if (shell->mode) { 
+        printf("Opening a file, please close it first\n");
+        return;
+    }
+
     uint32_t nameLen, extLen = 0;
     char *name, *ext;
 
@@ -124,7 +130,6 @@ void mkdir(char *args, void *shell_addr) {
     memcpy(nameBuf, name, nameLen);
     memcpy(extBuf, ext, extLen);
 
-    Shell *shell = (Shell *)shell_addr;
     SysDirectory *dir = &(shell->dir);
     uint16_t *fat1 = dir->fat1,
              *fat2 = dir->fat2,
@@ -234,6 +239,12 @@ void mkdir(char *args, void *shell_addr) {
 }
 
 void cd(char *args, void *shell_addr) {
+    Shell *shell = (Shell *)shell_addr;
+    if (shell->mode) { 
+        printf("Opening a file, please close it first\n");
+        return;
+    }
+
     uint32_t nameLen, extLen = 0;
     char *name, *ext;
 
@@ -247,7 +258,6 @@ void cd(char *args, void *shell_addr) {
     strncpy(nameBuf, name, nameLen);
     strncpy(extBuf, ext, extLen);
 
-    Shell *shell = (Shell *)shell_addr;
     SysDirectory *dir = &shell->dir;
     uint16_t *fat1 = dir->fat1,
              clust = dir->clustNum;
@@ -262,11 +272,16 @@ void cd(char *args, void *shell_addr) {
             }
             if (!strncmp(rec->name, nameBuf, 8)
                 && !strncmp(rec->ext, extBuf, 3)) {    
-                if (!strncmp(nameBuf, ".", 2)) {
+                if (rec->type == 0) {
+                    printf("%s is a file\n", args);
+                    return;
+                }
+                else if (!strncmp(nameBuf, ".", 2)) {
                     return;
                 }
                 else if (!strncmp(nameBuf, "..", 3)) {
-                    if ((p = shellBuf->tail)) {
+                    if (shellBuf->tail) {
+                        p = shellBuf->tail;
                         if (p->prev) {
                             p = p->prev;
                             free(p->next);
@@ -300,6 +315,8 @@ void cd(char *args, void *shell_addr) {
                         p->next = NULL;
                         shellBuf->tail = p;
                     }
+
+                    p->mode = 0;
                     p->self = rec;
                     if (nameLen > 0 && extLen > 0) {
                         snprintf(p->name, 13, "%s.%s", nameBuf, extBuf);

@@ -24,8 +24,8 @@ struct Command {
     {"ls",      2,0,(void (* )(char *, void *))&ls},
     {"delete",  6,1,(void (* )(char *, void *))&delete},
     {"open",    5,1,(void (* )(char *, void *))&open},
-    {"read",    5,1,NULL},
-    {"write",   5,1,NULL},
+    {"read",    5,1,(void (* )(char *, void *))&read},
+    {"write",   5,1,(void (* )(char *, void *))&write},
     {"close",   5,0,(void (* )(char *, void *))&close},
     {"exit",    4,0,(void (* )(char *, void *))&shell_exit},
     {"cd",      2,1,(void (* )(char *, void *))&cd}
@@ -35,7 +35,7 @@ void print_prompt(Shell *shell) {
     printf("/");
     DirChainNode *p = shell->buf[shell->index].head;
     while (p) {
-        if (p->self->type == 0x10) { 
+        if (p->mode == 0) { 
             printf("%s/", p->name);
         }
         else {

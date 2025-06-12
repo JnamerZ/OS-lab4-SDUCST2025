@@ -7,6 +7,9 @@
 #include <string.h>
 #include <stdlib.h>
 
+#define MIN(X, Y) ((X < Y) ? X : Y)
+#define MAX(X, Y) ((X > Y) ? X : Y)
+
 void delete_file(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2) {
     uint16_t clust = rec->clustNo, temp;
     do {
@@ -38,8 +41,14 @@ int find_file(SysDirectory *dir, char* name, char* ext, Record **res) {
             }
             
             if (!strncmp(name, rec->name, 8) && !strncmp(ext, rec->ext, 3)) {
-                *res = rec;
-                return 0;
+                if (rec->type == 0x10) {
+                    return 2;
+                }
+                else {
+                    *res = rec;
+                    return 0;
+                }
+                
             }
         }
         rec = (Record *)((char *)rec + (fat1[clust] - clust - 1)*4096);
@@ -95,6 +104,7 @@ CREATE_FILE_FAIL:
         rec = (Record *)((char *)dir->content + (freeClust[1] - dir->clustNum)*4096);
     }
     rec->clustNo = freeClust[0];
+    fat1[freeClust[0]] = fat2[freeClust[0]] = 0xFFFF;
     rec->size = 0;
 
     get_fat16_time_date(&now_time, &now_date);
@@ -115,6 +125,7 @@ void open(char *args, void *shell_addr) {
         printf("Already opening a file\n");
         return;
     }
+
     uint32_t nameLen, extLen = 0;
     char *name, *ext;
 
@@ -139,12 +150,18 @@ void open(char *args, void *shell_addr) {
 
     SysDirectory *dir = &(shell->dir);
     Record *rec = NULL;
-    if (find_file(dir, nameBuf, extBuf, &rec) && mode == 0) {
-        printf("No such file\n");
+    int result = find_file(dir, nameBuf, extBuf, &rec);
+    if (result == 1 && mode == 0) {
+        printf("No such file: %s\n", args);
+        return;
+    }
+    if (result == 2) {
+        printf("A directory with given file name already exists\n");
         return;
     }
     DirectoryBuffer *shellBuf = &(shell->buf[shell->index]);
     DirChainNode *p; SysFile *file = &shell->file;
+    uint16_t *fat1 = shell->partition->fat1;
     switch (mode) {
         case 0:
             shell->mode = 1;
@@ -178,12 +195,16 @@ void open(char *args, void *shell_addr) {
             else { //if (extLen > 0)
                 snprintf(p->name, 13, ".%s", extBuf);
             }
+            p->mode = 1;
 
             file->clustNum = rec->clustNo;
             file->mode = 0;
             file->size = rec->size;
-            file->write = file->read = 0;
-            file->content = ((char *)dir->content + (rec->clustNo - dir->clustNum)*4096);
+            file->alreadyRead = 0;
+            file->alreadyWrite = 0;
+            file->remainWrite = 0;
+            file->remainRead = 4096;
+            file->write = file->read = file->content = ((char *)dir->content + (rec->clustNo - dir->clustNum)*4096);
             break;
         case 1:
         case 2:
@@ -216,6 +237,7 @@ void open(char *args, void *shell_addr) {
                 p->prev = p->next = NULL;
             }
             p->self = rec;
+
             if (nameLen > 0 && extLen > 0) {
                 snprintf(p->name, 13, "%s.%s", nameBuf, extBuf);
             }
@@ -225,19 +247,37 @@ void open(char *args, void *shell_addr) {
             else { //if (extLen > 0)
                 snprintf(p->name, 13, ".%s", extBuf);
             }     
-            
+            p->mode = 1;
             file->clustNum = rec->clustNo;
             file->mode = mode;
             file->size = rec->size;
-            file->read = 0;
-            file->write = mode == 1 ? 0 : rec->size;
-            file->content = ((char *)dir->content + (rec->clustNo - dir->clustNum)*4096);
+            file->alreadyRead = 0;
+            file->remainRead = 4096;
+            file->read = file->content = ((char *)dir->content + (rec->clustNo - dir->clustNum)*4096);
+            if (mode == 2) {
+                uint32_t clust_offset = rec->size / 4096,
+                         clust = rec->clustNo;
+                for (uint32_t i = 0; i < clust_offset; i++) {
+                    clust = fat1[clust];
+                }
+                if (clust == 0 || clust >= 0xFFF8) {
+                    FAT_corrupt();
+                    exit(-1);
+                }
+                file->write = ((char*)dir->content + (clust - dir->clustNum)*4096 + (rec->size%4096));
+                file->alreadyWrite = rec->size;
+                file->remainWrite = 4096 - (rec->size % 4096);
+            }
+            else {
+                file->write = file->read;
+                file->alreadyWrite = 0;
+                file->remainWrite = 4096;
+            }
             break;
         default:
             printf("Invalid mode\n");
             return;
     }
-    
 }
 
 void close(char *args, void *shell_addr) {
@@ -245,7 +285,7 @@ void close(char *args, void *shell_addr) {
         printf("Too many arguments\n");
         return;
     }
-    
+
     Shell *shell = (Shell *)shell_addr;
     if (!shell->mode) {
         printf("Not opening a file\n");
@@ -264,9 +304,190 @@ void close(char *args, void *shell_addr) {
         p = p->prev;
         free(p->next);
         p->next = NULL;
+        shellBuf->tail = p;
     }
     else {
         free(p);
         shellBuf->head = shellBuf->tail = NULL;
     }
+}
+
+void read(char *args, void *shell_addr) {
+    Shell *shell = (Shell *)shell_addr;
+    if (!shell->mode) {
+        printf("Open a file first\n");
+        return;
+    }
+
+    uint32_t size = (uint32_t)atoi(args);
+    SysFile *file = &shell->file;
+
+    if (size == 0xFFFFFFFF) { // -1
+        file->read = file->content;
+        file->alreadyRead = 0;
+        file->remainRead = MIN(file->size, 4096);
+        return;
+    }
+
+    uint32_t realSize = MIN(file->size - file->alreadyRead, size);
+
+    char *buffer = calloc(realSize, sizeof(char));
+    if (!buffer) {
+        calloc_failed();
+        exit(-1);
+    }
+
+    size = realSize;
+    
+    uint16_t clust = file->clustNum,
+             clust_offset = (uint16_t)(file->alreadyRead / 4096),
+             *fat1 = shell->partition->fat1;
+    for (uint16_t i = 0; i < clust_offset; i++) {
+        clust = fat1[clust];
+    }
+    while (size > file->remainRead) {
+        strncat(buffer, file->read, file->remainRead);
+        file->alreadyRead += file->remainRead;
+        size -= file->remainRead;
+        clust = fat1[clust];
+        file->read = (file->content + (clust - file->clustNum)*4096);
+        file->remainRead = MIN(file->size - file->alreadyRead, 4096);
+    }
+    strncat(buffer, file->read, size);
+    file->read += size;
+    file->alreadyRead += size;
+    file->remainRead -= size;
+    
+    printf("Read %u bytes:\n", realSize);
+    uint32_t temp = realSize / 16;
+    char buf;
+    for (uint32_t i = 0; i < temp; i++) {
+        printf("%u | ", i);
+        for (uint32_t j = 0; j < 16; j++) {
+            printf("%02X ", buffer[i * 16 + j]);
+        }
+        printf("| ");
+        for (uint32_t j = 0; j < 16; j++) {
+            buf = buffer[i * 16 + j];
+            if (buf < 127 && buf > 31) {
+                printf("%c", buf);
+            }
+            else {
+                printf("%c", '.');
+            }
+        }
+        printf(" |\n");
+    }
+    if (realSize & 0xf) {
+        printf("%u | ", temp);
+        temp *= 16;
+        for (uint32_t i = temp; i < realSize; i++) {
+            printf("%02X ", buffer[i]);
+        }
+        printf("| ");
+        for (uint32_t i = temp; i < realSize; i++) {
+            buf = buffer[i];
+            if (buf < 127 && buf > 31) {
+                printf("%c", buf);
+            }
+            else {
+                printf("%c", '.');
+            }
+        }
+        printf(" |\n");
+    }
+    free(buffer);
+}
+
+void write(char *args, void *shell_addr) {
+    Shell *shell = (Shell *)shell_addr;
+    if (!shell->mode) {
+        printf("Open a file first\n");
+        return;
+    }
+    SysFile *file = &shell->file;
+    if (file->mode == 0) {
+        printf("Read only mode\n");
+        return;
+    }
+    
+    uint32_t size = (uint32_t)atoi(args);
+
+    if (size == 0xFFFFFFFF) { // -1
+        file->write = file->content;
+        file->alreadyWrite = 0;
+        file->remainWrite = MIN(file->size, 4096);
+        return;
+    }
+
+    uint16_t clust = file->clustNum,
+             clust_offset = (uint16_t)(file->alreadyWrite / 4096),
+             *fat1 = shell->partition->fat1,
+             *fat2 = shell->partition->fat2;
+    uint32_t fatLen = shell->partition->fatLen;
+
+    uint32_t newSize = file->alreadyWrite + size,
+             newClustCnt = (newSize / 4096) - (file->size / 4096);
+    uint16_t *newClusts, cnt = 0;
+
+    for (uint16_t i = 0; i < clust_offset; i++) {
+        clust = fat1[clust];
+        if (clust == 0 || clust >= 0xFFF8) {
+            FAT_corrupt();
+            exit(-1);
+        }
+    }
+
+    if (newSize > file->size) {
+        newClusts = calloc(newClustCnt, sizeof(uint16_t));
+        if (!newClusts) {
+            calloc_failed();
+            exit(-1);
+        }
+        for (uint32_t i = 0; i < fatLen && cnt < newClustCnt; i++) {
+            if (!fat1[i]) {
+                newClusts[cnt++] = (uint16_t)i;
+            }
+        }
+        if (cnt < newClustCnt) {
+            printf("Partition full\n");
+            free(newClusts);
+            return;
+        }
+        cnt = clust;
+        for (uint32_t i = 0; i < newClustCnt; i++) {
+            fat1[cnt] = fat2[cnt] = newClusts[i];
+            cnt = newClusts[i];
+        }
+        fat1[cnt] = fat2[cnt] = 0xFFFF;
+        file->size = newSize;
+        free(newClusts);
+    }
+
+    char *buffer = calloc(size + 1, sizeof(char));
+    if (!buffer) {
+        calloc_failed();
+        exit(-1);
+    }
+
+    printf("Writing %u bytes:\n> ", size);
+    fgets(buffer, (int)size + 1, stdin);
+    
+    while (size > file->remainWrite) {
+        memcpy(file->write, buffer, file->remainWrite);
+        file->alreadyWrite += file->remainWrite;
+        size -= file->remainWrite;
+        clust = fat1[clust];
+        file->write = (file->content + (clust - file->clustNum)*4096);
+        file->remainWrite = MIN(file->size - file->alreadyWrite, 4096);
+    }
+    memcpy(file->write, buffer, size);
+    file->write += size;
+    file->alreadyWrite += size;
+    file->remainWrite -= size;
+
+    printf("Writed %u bytes\n", size);
+    
+    shell->buf[shell->index].tail->self->size = file->size;
+    free(buffer);
 }
