@@ -12,7 +12,28 @@ void shell_exit() {
     exit(0);
 }
 
-#define COMMAND_CNT 10
+void help() {
+    puts("Commands:");
+    puts("part <index>            : Change current partition");
+    puts("                          index = 0, 1, 2, 3");
+    puts("mkdir <dir name>        : Create a directory");
+    puts("ls                      : Show all entities in current directory");
+    puts("cd <dir name>           : Change work directory");
+    puts("open <file name> <mode> : Open a file");
+    puts("                          mode = 0: read-only mode ");
+    puts("                                    (file must exists)");
+    puts("                          mode = 1: read-write mode");
+    puts("                          mode = 2: read-write-append mode");
+    puts("read <n>                : Read n bytes from the file opened until end of file");
+    puts("                          n = -1 means read from the first byte of the file");
+    puts("write <n>               : Write n bytes to the file opened");
+    puts("                          n = -1 means write from the first byte of the file");
+    puts("delete <file/dir name>  : Delete a file or a directory if not empty");
+    puts("help                    : Print this message");
+    puts("exit                    : Exit shell");
+}
+
+#define COMMAND_CNT 11
 
 struct Command {
     char op[8];
@@ -29,7 +50,8 @@ struct Command {
     {"close",   5,0,(void (* )(char *, void *))&close},
     {"exit",    4,0,(void (* )(char *, void *))&shell_exit},
     {"cd",      2,1,(void (* )(char *, void *))&cd},
-    {"part",    4,1,(void (* )(char *, void *))&part}
+    {"part",    4,1,(void (* )(char *, void *))&part},
+    {"help",    4,0,(void (* )(char *, void *))&help}
 };
 
 void print_prompt(Shell *shell) {
