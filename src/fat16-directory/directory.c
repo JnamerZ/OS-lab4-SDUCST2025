@@ -160,7 +160,7 @@ void mkdir(char *args, void *shell_addr) {
     } while (clust < 0xFFF8);
     
     rec = dir->content; clust = dir->clustNum;
-    uint32_t i, newClust, fatLen = dir->fatLen;
+    uint32_t i, newClust = 0xFFFF, fatLen = dir->fatLen;
     while (1) {
         for (i = 0; i < 128; i++, rec++) {
             if (!*((uint64_t *)(rec->name))
@@ -184,7 +184,7 @@ void mkdir(char *args, void *shell_addr) {
 
         if (fat1[clust] == 0) {
             FAT_corrupt();
-            return;
+            exit(-1);
         }
 
         if (fat1[clust] >= 0xFFF8) {
@@ -209,6 +209,10 @@ void mkdir(char *args, void *shell_addr) {
         clust = fat1[clust];
     }
     // add a directory
+    if (newClust == 0xFFFF) {
+        FAT_corrupt();
+        exit(-1);
+    }
     strncpy(rec->name, name, nameLen);
     strncpy(rec->ext, ext, extLen);
     rec->type = 0x10; // dir

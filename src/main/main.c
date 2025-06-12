@@ -7,7 +7,8 @@ Disk disk;
 Shell shell;
 
 int main(){
-    setvbuf(stdout, 0, 2, 0);
+    setbuf(stdin, 0);
+    setbuf(stdout, 0);
     if (init(&disk)) {
         printf("Init failed.\n");
         return -1;

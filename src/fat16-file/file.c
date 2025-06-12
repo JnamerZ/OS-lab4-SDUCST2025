@@ -9,6 +9,8 @@
 
 #define MIN(X, Y) ((X < Y) ? X : Y)
 #define MAX(X, Y) ((X > Y) ? X : Y)
+#define GET_CLUSTCNT(X) \
+    ((X == 0) ? 1 : ((X / 4096) + ((X % 4096) ? 1 : 0)))
 
 void delete_file(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2) {
     uint16_t clust = rec->clustNo, temp;
@@ -331,7 +333,8 @@ void read(char *args, void *shell_addr) {
 
     uint32_t realSize = MIN(file->size - file->alreadyRead, size);
 
-    char *buffer = calloc(realSize, sizeof(char));
+    char *buffer = calloc(realSize, sizeof(char)),
+         *ptr = buffer;
     if (!buffer) {
         calloc_failed();
         exit(-1);
@@ -346,17 +349,18 @@ void read(char *args, void *shell_addr) {
         clust = fat1[clust];
     }
     while (size > file->remainRead) {
-        strncat(buffer, file->read, file->remainRead);
+        memcpy(ptr, file->read, file->remainRead);
+        ptr += file->remainRead;
         file->alreadyRead += file->remainRead;
         size -= file->remainRead;
         clust = fat1[clust];
         file->read = (file->content + (clust - file->clustNum)*4096);
         file->remainRead = MIN(file->size - file->alreadyRead, 4096);
     }
-    strncat(buffer, file->read, size);
+    memcpy(ptr, file->read, size);
     file->read += size;
     file->alreadyRead += size;
-    file->remainRead -= size;
+    file->remainRead = MIN(file->size - file->alreadyRead, 4096);
     
     printf("Read %u bytes:\n", realSize);
     uint32_t temp = realSize / 16;
@@ -364,7 +368,7 @@ void read(char *args, void *shell_addr) {
     for (uint32_t i = 0; i < temp; i++) {
         printf("%u | ", i);
         for (uint32_t j = 0; j < 16; j++) {
-            printf("%02X ", buffer[i * 16 + j]);
+            printf("%02hhX ", buffer[i * 16 + j]);
         }
         printf("| ");
         for (uint32_t j = 0; j < 16; j++) {
@@ -382,7 +386,7 @@ void read(char *args, void *shell_addr) {
         printf("%u | ", temp);
         temp *= 16;
         for (uint32_t i = temp; i < realSize; i++) {
-            printf("%02X ", buffer[i]);
+            printf("%02hhX ", buffer[i]);
         }
         printf("| ");
         for (uint32_t i = temp; i < realSize; i++) {
@@ -406,6 +410,7 @@ void write(char *args, void *shell_addr) {
         return;
     }
     SysFile *file = &shell->file[shell->index];
+    
     if (file->mode == 0) {
         printf("Read only mode\n");
         return;
@@ -421,14 +426,16 @@ void write(char *args, void *shell_addr) {
     }
 
     uint16_t clust = file->clustNum,
-             clust_offset = (uint16_t)(file->alreadyWrite / 4096),
+             clust_offset = (uint16_t)((file->alreadyWrite) ? 
+                            (file->alreadyWrite / 4096 - ((file->alreadyWrite%4096)?0:1))
+                            : 0),
              *fat1 = shell->partitions[shell->index].fat1,
              *fat2 = shell->partitions[shell->index].fat2;
     uint32_t fatLen = shell->partitions->fatLen;
 
-    uint32_t newSize = file->alreadyWrite + size,
-             newClustCnt = (newSize / 4096) - (file->size / 4096);
-    uint16_t *newClusts, cnt = 0;
+    uint64_t newSize = file->alreadyWrite + size,
+             newClustCnt = GET_CLUSTCNT(newSize) - GET_CLUSTCNT(file->size);
+    uint16_t *newClusts, cnt;
 
     for (uint16_t i = 0; i < clust_offset; i++) {
         clust = fat1[clust];
@@ -438,7 +445,8 @@ void write(char *args, void *shell_addr) {
         }
     }
 
-    if (newSize > file->size) {
+    if (newClustCnt) {
+        cnt = 0;
         newClusts = calloc(newClustCnt, sizeof(uint16_t));
         if (!newClusts) {
             calloc_failed();
@@ -450,7 +458,7 @@ void write(char *args, void *shell_addr) {
             }
         }
         if (cnt < newClustCnt) {
-            printf("Partition full\n");
+            printf("Not enough space for %u bytes\n", size);
             free(newClusts);
             return;
         }
@@ -460,9 +468,10 @@ void write(char *args, void *shell_addr) {
             cnt = newClusts[i];
         }
         fat1[cnt] = fat2[cnt] = 0xFFFF;
-        file->size = newSize;
         free(newClusts);
     }
+
+    file->size = (uint32_t)newSize;
 
     char *buffer = calloc(size + 1, sizeof(char));
     if (!buffer) {
@@ -471,9 +480,11 @@ void write(char *args, void *shell_addr) {
     }
 
     printf("Writing %u bytes:\n> ", size);
-    fgets(buffer, (int)size + 1, stdin);
+    for (uint32_t i = 0; i < size; i++) {
+        buffer[i] = (char)getchar();
+    }
     
-    while (size > file->remainWrite) {
+    while (size > 4096) {
         memcpy(file->write, buffer, file->remainWrite);
         file->alreadyWrite += file->remainWrite;
         size -= file->remainWrite;
@@ -484,7 +495,7 @@ void write(char *args, void *shell_addr) {
     memcpy(file->write, buffer, size);
     file->write += size;
     file->alreadyWrite += size;
-    file->remainWrite -= size;
+    file->remainWrite = MIN(file->size - file->alreadyWrite, 4096);
 
     printf("Writed %u bytes\n", size);
     

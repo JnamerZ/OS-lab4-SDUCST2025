@@ -22,7 +22,7 @@ void load_mbr(MBR *mbr, SysMBR *sysmbr) {
         p->index = dbr->volID;
         p->fat1 = (uint16_t *)((char *)dbr + 512);
         p->fat2 = (uint16_t *)((char *)(p->fat1) + (dbr->secPerFAT << 9));
-        p->fatLen = dbr->secPerFAT << 8; // 256 items per sec
+        p->fatLen = (pr->sector_count - (dbr->secPerFAT << 1)) >> 3; // 8 sec per clust
         for (uint32_t j = 0; j < p->fatLen; j++) {
             if (p->fat1[j] != p->fat2[j]) {
                 FAT_corrupt();

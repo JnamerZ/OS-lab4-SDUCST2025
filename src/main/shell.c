@@ -112,7 +112,7 @@ void process_command(char *buf, void *shell) {
 
 void startup(Shell *shell, Disk *disk) {
     memcpy(shell->partitions, &(disk->sysmbr.partitions), 4*sizeof(SysPartition));
-    memset(&(shell->file), 0, sizeof(SysFile));
+    memset(shell->file, 0, 4*sizeof(SysPartition));
     for (int i = 0; i < 4; i++) {
         memcpy(&(shell->dir[i]), &(disk->sysmbr.partitions[i].root), sizeof(SysDirectory));
         shell->buf[i].head = shell->buf[i].tail = NULL;
