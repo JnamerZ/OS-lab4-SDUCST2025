@@ -468,7 +468,7 @@ void f_write(char *args, void *shell_addr) {
     uint32_t fatLen = shell->partitions->fatLen;
 
     uint64_t newSize = file->alreadyWrite + size,
-             newClustCnt = GET_CLUSTCNT(newSize) - GET_CLUSTCNT(file->size);
+             newClustCnt = ((newSize > file->size) ? (GET_CLUSTCNT(newSize) - GET_CLUSTCNT(file->size)) : 0);
     uint16_t *newClusts, cnt;
 
     for (uint16_t i = 0; i < clust_offset; i++) {
@@ -505,7 +505,9 @@ void f_write(char *args, void *shell_addr) {
         free(newClusts);
     }
 
-    file->size = (uint32_t)newSize;
+    if (newSize > file->size) {
+        file->size = (uint32_t)newSize;
+    }
 
     char *buffer = calloc(size + 1, sizeof(char));
     if (!buffer) {
@@ -537,5 +539,6 @@ void f_write(char *args, void *shell_addr) {
     printf("Writed %u bytes\n", size);
     pthread_mutex_unlock(shell->mutex);
     shell->buf[shell->index].tail->self->size = file->size;
+    file->remainRead = MIN(file->size - file->alreadyRead, 4096);
     free(buffer);
 }
