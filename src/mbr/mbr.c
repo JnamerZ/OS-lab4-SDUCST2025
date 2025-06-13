@@ -30,11 +30,6 @@ void load_mbr(MBR *mbr, SysMBR *sysmbr) {
             }
         }
         p->root.content = (Record *)((char *)(p->fat2) + (dbr->secPerFAT << 9));
-        p->root.content->mutex = malloc(sizeof(pthread_mutex_t));
-        if (pthread_mutex_init(p->root.content->mutex, NULL)) {
-            printf("Init mutex error\n");
-            exit(-1);
-        }
         p->root.clustNum = 0;
         p->root.fat1 = p->fat1;
         p->root.fat2 = p->fat2;

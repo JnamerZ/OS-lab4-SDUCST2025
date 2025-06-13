@@ -10,8 +10,8 @@
 typedef struct {
     char name[8], ext[3],
             type;
-    pthread_mutex_t * mutex;
-    char reserved[2]; // use reserved store mutex_ptr
+    uint32_t read, write;
+    char reserved[2]; // use reserved store r/w flags
     uint16_t time, date, clustNo;
     uint32_t size;
 }  __attribute__((packed)) Record;

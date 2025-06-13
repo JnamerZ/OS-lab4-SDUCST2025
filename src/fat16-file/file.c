@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define MIN(X, Y) ((X < Y) ? X : Y)
 #define MAX(X, Y) ((X > Y) ? X : Y)
@@ -25,7 +26,6 @@ void delete_file(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2) {
         fat1[temp] = fat2[temp] = 0;
         target = (target + (clust - temp)*4096);
     } while (clust < 0xFFF8);
-    free(rec->mutex);
     memset(rec, 0, sizeof(Record));
 }
 
@@ -122,7 +122,7 @@ CREATE_FILE_FAIL:
 // read-write+ - 2 (write-append)
 // create file when *write* but file not found
 
-void open(char *args, void *shell_addr) {
+void f_open(char *args, void *shell_addr) {
     Shell *shell = (Shell *)shell_addr;
     if (shell->mode[shell->index]) {
         printf("Already opening a file\n");
@@ -167,6 +167,13 @@ void open(char *args, void *shell_addr) {
     uint16_t *fat1 = shell->partitions[shell->index].fat1;
     switch (mode) {
         case 0:
+            pthread_mutex_lock(shell->mutex);
+            while (rec->write) {
+                pthread_mutex_unlock(shell->mutex);
+                pthread_mutex_lock(shell->mutex);
+            }
+            rec->read++;
+            pthread_mutex_unlock(shell->mutex);
             shell->mode[shell->index] = 1;
             if (shellBuf->tail) {
                 p = shellBuf->tail;
@@ -214,13 +221,22 @@ void open(char *args, void *shell_addr) {
             if (create_file(dir, &rec) || !rec) {
                 return;
             }
-            memcpy(rec->name, nameBuf, 8);
-            memcpy(rec->ext, extBuf, 3);
-            rec->type = 0;
-            rec->mutex = malloc(sizeof(pthread_mutex_t));
-            if (pthread_mutex_init(rec->mutex, NULL)) {
-                printf("Init mutex error\n");
-                exit(-1);
+            if ((*(uint64_t *)(rec->name)) || (*(uint64_t *)(rec->ext))) {
+                pthread_mutex_lock(shell->mutex);
+                while (rec->read || rec->write) {
+                    pthread_mutex_unlock(shell->mutex);
+                    pthread_mutex_lock(shell->mutex);
+                }
+                rec->write++;
+                pthread_mutex_unlock(shell->mutex);
+            }
+            else {
+                pthread_mutex_lock(shell->mutex);
+                memcpy(rec->name, nameBuf, 8);
+                memcpy(rec->ext, extBuf, 3);
+                rec->type = 0;
+                rec->write++;
+                pthread_mutex_unlock(shell->mutex);
             }
 
             shell->mode[shell->index] = 1;
@@ -288,7 +304,7 @@ void open(char *args, void *shell_addr) {
     }
 }
 
-void close(char *args, void *shell_addr) {
+void f_close(char *args, void *shell_addr) {
     if (args && strlen(args)) {
         printf("Too many arguments\n");
         return;
@@ -308,6 +324,16 @@ void close(char *args, void *shell_addr) {
         exit(-1);
     }
 
+    pthread_mutex_lock(shell->mutex);
+    if (shell->file[shell->index].mode) {
+        p->self->write--;
+    }
+    else {
+        p->self->read--;
+    }
+    pthread_mutex_unlock(shell->mutex);
+    
+
     if (p->prev) {
         p = p->prev;
         free(p->next);
@@ -320,7 +346,7 @@ void close(char *args, void *shell_addr) {
     }
 }
 
-void read(char *args, void *shell_addr) {
+void f_read(char *args, void *shell_addr) {
     Shell *shell = (Shell *)shell_addr;
     if (!shell->mode[shell->index]) {
         printf("Open a file first\n");
@@ -368,6 +394,7 @@ void read(char *args, void *shell_addr) {
     file->alreadyRead += size;
     file->remainRead = MIN(file->size - file->alreadyRead, 4096);
     
+    pthread_mutex_lock(shell->mutex);
     printf("Read %u bytes:\n", realSize);
     uint32_t temp = realSize / 16;
     char buf;
@@ -406,10 +433,11 @@ void read(char *args, void *shell_addr) {
         }
         printf(" |\n");
     }
+    pthread_mutex_unlock(shell->mutex);
     free(buffer);
 }
 
-void write(char *args, void *shell_addr) {
+void f_write(char *args, void *shell_addr) {
     Shell *shell = (Shell *)shell_addr;
     if (!shell->mode[shell->index]) {
         printf("Open a file first\n");
@@ -485,7 +513,9 @@ void write(char *args, void *shell_addr) {
         exit(-1);
     }
 
+    pthread_mutex_lock(shell->mutex);
     printf("Writing %u bytes:\n> ", size);
+    pthread_mutex_unlock(shell->mutex);
     for (uint32_t i = 0; i < size; i++) {
         buffer[i] = (char)getchar();
     }
@@ -502,9 +532,10 @@ void write(char *args, void *shell_addr) {
     file->write += size;
     file->alreadyWrite += size;
     file->remainWrite = MIN(file->size - file->alreadyWrite, 4096);
-
-    printf("Writed %u bytes\n", size);
     
+    pthread_mutex_lock(shell->mutex);
+    printf("Writed %u bytes\n", size);
+    pthread_mutex_unlock(shell->mutex);
     shell->buf[shell->index].tail->self->size = file->size;
     free(buffer);
 }

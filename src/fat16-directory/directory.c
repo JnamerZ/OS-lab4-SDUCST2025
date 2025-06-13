@@ -221,11 +221,6 @@ void mkdir(char *args, void *shell_addr) {
     rec->date = now_date;
     rec->clustNo = (uint16_t)newClust;
     rec->size = 4096;
-    rec->mutex = malloc(sizeof(pthread_mutex_t));
-    if (pthread_mutex_init(rec->mutex, NULL)) {
-        printf("Init mutex error\n");
-        exit(-1);
-    }
     fat1[newClust] = fat2[newClust] = 0xFFFF;
 
     rec = (Record *)(((char *)dir->content) + (newClust - dir->clustNum)*4096);
@@ -383,6 +378,5 @@ void delete_dir(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2) {
         clust = fat1[clust];
         fat1[temp] = fat2[temp] = 0;
     } while (clust < 0xFFF8);
-    free(rec->mutex);
     memset(rec, 0, sizeof(Record));
 }

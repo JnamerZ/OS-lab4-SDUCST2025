@@ -11,6 +11,7 @@
 typedef struct {
     uint8_t *addr;
     SysMBR sysmbr;
+    pthread_mutex_t *mutex;
 } Disk;
 
 void format(Disk * disk);

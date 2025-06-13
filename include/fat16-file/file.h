@@ -13,8 +13,8 @@ typedef struct {
 } SysFile;
 
 void delete_file(Record *rec, char *target, uint16_t *fat1, uint16_t *fat2);
-void open(char *args, void *shell);
-void close(char *args, void *shell);
-void read(char *args, void *shell);
-void write(char *args, void *shell);
+void f_open(char *args, void *shell);
+void f_close(char *args, void *shell);
+void f_read(char *args, void *shell);
+void f_write(char *args, void *shell);
 #endif

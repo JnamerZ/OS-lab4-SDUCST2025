@@ -18,6 +18,7 @@ typedef struct {
 } DirectoryBuffer;
 
 typedef struct {
+    pthread_mutex_t *mutex;
     uint8_t index, mode[4];
     SysPartition partitions[4];
     SysDirectory dir[4];
